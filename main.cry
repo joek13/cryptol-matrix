@@ -1,0 +1,67 @@
+module Main where
+
+import Float
+
+type Float32 = Float 8 24
+type Vec k a = [k]a
+type Mat m n a = [m][n]a
+
+type constraint Dim n = (fin n, n > 0)
+type constraint Elem a = (Eq a, Ring a)
+
+// Initialization
+
+full : { m, n, a } (Dim m, Dim n) => a -> Mat m n a
+full v = repeat (repeat v)
+
+zeros : { m, n, a } (Dim m, Dim n, Literal 0 a) => Mat m n a
+zeros = full 0
+
+diag : { m, n, a } (Dim m, Dim n, Literal 0 a) => a -> Mat m n a
+diag v = [ [ if i == j then v else 0 | j <- [1..n] ] | i <- [1..m]]
+
+id : { m, n, a } (Dim m, Dim n, Literal 0 a, Literal 1 a) => Mat m n a
+id = diag 1
+
+// Matrix operations
+
+scale : { k, a } Ring a => a -> Vec k a -> Vec k a
+scale t = map (\x -> t * x)
+
+matvec : { m, n, a } (Dim m, Dim n, Elem a, Ring ([m]a)) => Mat m n a -> Vec n a -> Vec m a
+matvec M v = sum (zipWith scale v (transpose M))
+
+matmul : { m, k, n, a } (Dim m, Dim k, Dim n, Elem a, Ring ([m]a)) => Mat m k a -> Mat k n a -> Mat m n a
+matmul A B = transpose (zipWith matvec (repeat A) (transpose B))
+
+// Matrix views
+
+flatten : { m, n, a } (Dim m, Dim n) => Mat m n a -> Vec (m*n) a
+flatten = join 
+
+unflatten : { m, n, a } (Dim m, Dim n) => Vec (m*n) a -> Mat m n a
+unflatten = groupBy
+
+reshape : { p, q, m, n, a } (Dim m, Dim n, Dim p, Dim q, m*n == p*q) => Mat m n a -> Mat p q a
+reshape M = unflatten (flatten M)
+
+// Example
+
+relu : { a } (Literal 0 a, Cmp a) => a -> a
+relu x = if x > 0 then x else 0
+
+dense : { batch_size, input_size, units } (Dim batch_size, Dim input_size, Dim units) 
+    => Mat input_size units Float32 
+    -> Vec units Float32 
+    -> Mat batch_size input_size Float32 
+    -> Mat batch_size units Float32
+dense W b x = map (map relu) ((matmul x W) + repeat b)
+
+out = dense W b x
+    where
+        x = [[1,2,3],
+             [4,5,6]]
+
+        b = [-20,-10,0,10,20]
+
+        W = unflatten [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3] 
