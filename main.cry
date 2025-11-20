@@ -112,6 +112,9 @@ dense : { batch_size, input_size, units } (Dim batch_size, Dim input_size, Dim u
     -> Mat batch_size units Float32      // Output matrix
 dense W b x = map (map relu) ((matmul x W) + repeat b)
 
+// Need to do ugly things like 'repeat b'/'map (map relu)' to get the dimensions to line up,
+// since we lack something like NumPy's broadcast semantics.
+
 // Compute a forward pass through the dense layer with some arbitrary inputs 
 out = dense W b x
     where
@@ -121,3 +124,7 @@ out = dense W b x
         b = [-20,-10,0,10,20]
 
         W = unflatten [ i /. 10 | i <- [1 .. 15]]
+
+// gives:
+// [[0, 0, 5.80000019, 16.3999996, 27.0], 
+//  [0, 1.5, 13.0, 24.5, 36.0]]
