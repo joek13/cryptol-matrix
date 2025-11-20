@@ -1,6 +1,12 @@
 module Main where
 
+/*
+ * Proof of concept: basic matrix operations implemented in Cryptol.
+ */
+
 import Float
+
+// Type definitions
 
 type Float32 = Float 8 24
 type Vec k a = [k]a
@@ -9,7 +15,7 @@ type Mat m n a = [m][n]a
 type constraint Dim n = (fin n, n > 0)
 type constraint Elem a = (Eq a, Ring a)
 
-// Initialization
+// Initializing vectors and matrices
 
 full : { m, n, a } (Dim m, Dim n) => a -> Mat m n a
 full v = repeat (repeat v)
@@ -45,18 +51,68 @@ unflatten = groupBy
 reshape : { p, q, m, n, a } (Dim m, Dim n, Dim p, Dim q, m*n == p*q) => Mat m n a -> Mat p q a
 reshape M = unflatten (flatten M)
 
-// Example
+// The main reason for exploring matrix operations in Cryptol is its dependent type system.
+// We can express dimension requirements in function signatures, surfacing shape mismatches as compiler errors.
+// And so a matmul between a 3x4 and 4x5 matrix typechecks:
+
+wellFormedMatmul = matmul (zeros`{3,4}) (zeros`{4,5})
+
+// But a 3x4 and a 3x3 doesn't:
+
+/*
+
+malformedMatmul = matmul (zeros`{3,4}) (zeros`{3,3})
+
+// yields:
+// [error] at main.cry:62:41--62:46:
+//   Type mismatch:
+//     Expected type: 4
+//     Inferred type: 3
+//     Context: [ERROR] _
+//     When checking type of function argument
+
+*/
+
+// We can also express more complicated requirements. For instance, that reshape preserves element count. So this works:
+
+reshaped = reshape`{3,2} [[1,2,3],
+                          [4,5,6]]
+
+// yields:
+// [[1,2],
+//  [3,4],
+//  [5,6]]
+
+// But this fails to typecheck:
+
+/*
+
+misshaped = reshape`{3,3} [[1,2,3],
+                           [4,5,6]]
+
+// yields:
+// [error] at main.cry:88:1--89:36:
+//   • Unsolvable constraint:
+//       6 == 9
+//         arising from
+//         use of expression reshape
+//         at main.cry:88:13--88:20
+
+*/
+
+// For reference, let's implement a dense (fully connected) neural network layer.
 
 relu : { a } (Literal 0 a, Cmp a) => a -> a
 relu x = if x > 0 then x else 0
 
 dense : { batch_size, input_size, units } (Dim batch_size, Dim input_size, Dim units) 
-    => Mat input_size units Float32 
-    -> Vec units Float32 
-    -> Mat batch_size input_size Float32 
-    -> Mat batch_size units Float32
+    => Mat input_size units Float32      // Weights matrix
+    -> Vec units Float32                 // Bias vector
+    -> Mat batch_size input_size Float32 // Input matrix
+    -> Mat batch_size units Float32      // Output matrix
 dense W b x = map (map relu) ((matmul x W) + repeat b)
 
+// Compute a forward pass through the dense layer with some arbitrary inputs 
 out = dense W b x
     where
         x = [[1,2,3],
@@ -64,4 +120,4 @@ out = dense W b x
 
         b = [-20,-10,0,10,20]
 
-        W = unflatten [1,2,3,1,2,3,1,2,3,1,2,3,1,2,3] 
+        W = unflatten [ i /. 10 | i <- [1 .. 15]]
