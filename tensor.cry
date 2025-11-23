@@ -1,3 +1,0 @@
-module Tensor where
-
-type Shape n ix = [n] ix
